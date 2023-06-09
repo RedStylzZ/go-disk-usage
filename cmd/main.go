@@ -1,85 +1,111 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"log"
 	"math"
 	"os"
+	"strings"
 )
 
 const (
 	KiB = 1024
-	MiB = KiB * 1024
-	GiB = MiB * 1024
-	TiB = GiB * 1024
-	PiB = TiB * 1024
-	KB  = 1000
-	MB  = KB * 1000
-	GB  = MB * 1000
-	TB  = GB * 1000
-	PB  = TB * 1000
+)
+
+var (
+	humanReadable = flag.Bool("h", false, "Output sizes in MiB, GiB...")
+	printTotal    = flag.Bool("t", false, "Output a total line")
+	level         = flag.Int("l", -1, "Define till which level the output should be printed")
 )
 
 func prettifyOutput(size float64, suffix string) string {
-	return fmt.Sprintf("%.2f %s", float64(size)/KiB, suffix)
+	return fmt.Sprintf("%.2f %s", size/KiB, suffix)
 }
 
 func prettyByteSize(b int64) string {
 	bf := float64(b)
 	for _, unit := range []string{"B  ", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB"} {
-		if math.Abs(bf) < 1024.0 {
+		if math.Abs(bf) < float64(KiB) {
 			return fmt.Sprintf("%.2f %s", bf, unit)
 		}
-		bf /= 1024.0
+		bf /= float64(KiB)
 	}
 	return fmt.Sprintf("%.2f YiB", bf)
 }
 
 func iterDirs(entries []os.DirEntry, path string, level int, humanReadable bool) int64 {
 	var totalSize int64
-	level--
+	subLvl := level
+
+	if subLvl > 0 {
+		subLvl--
+	}
 	for _, entry := range entries {
-		var dirSize int64
-		var info os.FileInfo
-		var err error
 		if entry.IsDir() {
-			subPath := fmt.Sprintf("%s/%s/", path, entry.Name())
-			subEntries, err := os.ReadDir(subPath)
+			i, err := entry.Info()
 			if err != nil {
-				fmt.Println(err)
+				fmt.Fprintln(os.Stderr, err)
 				continue
 			}
-			dirSize += iterDirs(subEntries, subPath, level, humanReadable)
-			if level >= 0 {
-				dirSizeStr := prettifyOutput(float64(dirSize)/KiB, "KiB")
+			dirSize := i.Size()
+
+			subPath := strings.ReplaceAll(fmt.Sprintf("%s/%s", path, entry.Name()), "//", "/")
+			subEntries, err := os.ReadDir(subPath)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				continue
+			}
+
+			dirSize += iterDirs(subEntries, subPath, subLvl, humanReadable)
+			if subLvl > 0 || subLvl == -1 {
+				dirSizeStr := prettifyOutput(float64(dirSize), "B  ")
 				if humanReadable {
 					dirSizeStr = prettyByteSize(dirSize)
 				}
-				fmt.Printf("%s\t%s\n", dirSizeStr, entry.Name())
+				fmt.Printf("%s\t%s\n", dirSizeStr, subPath)
 			}
 			totalSize += dirSize
 		} else {
-			info, err = entry.Info()
+			info, err := entry.Info()
 			if err != nil {
-				log.Fatal(err)
+				fmt.Fprintln(os.Stderr, err)
+				continue
 			}
-			totalSize += info.Size()
+			if info.Name() == "kcore" && info.Size() > 10485760 {
+				continue
+			}
+			size := info.Size()
+			totalSize += size
 		}
 	}
 	return totalSize
 }
 
 func main() {
-	level := 1
-	humanReadable := true
-	path := ""
-	dirs, _ := os.ReadDir(path)
-	totalSize := iterDirs(dirs, path, level, humanReadable)
-	if humanReadable {
-		fmt.Printf("%s\tTotal\n", prettyByteSize(totalSize))
+	flag.Parse()
+	path := "."
+	if len(flag.Args()) > 0 {
+		path = flag.Arg(0)
+		if len(path) > 1 {
+			path = strings.TrimRight(path, "/")
+		}
+	}
+
+	dirs, err := os.ReadDir(path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
+	totalSize := iterDirs(dirs, path, *level+1, *humanReadable)
+	var total string
+	if *humanReadable {
+		total = prettyByteSize(totalSize)
 	} else {
-		output := prettifyOutput(float64(totalSize)/KiB, "KiB")
-		fmt.Printf("%s\tTotal", output)
+		total = prettifyOutput(float64(totalSize), "B  ")
+	}
+	fmt.Printf("%s\t%s\n", total, path)
+	if *printTotal {
+		fmt.Printf("%s\tTotal\n", total)
 	}
 
 }
