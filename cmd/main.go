@@ -43,14 +43,13 @@ func getAsKibibyte(size float64) string {
 }
 
 func prettyByteSize(b float64) string {
-	bf := float64(b)
 	for _, unit := range []string{"B  ", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB"} {
-		if math.Abs(bf) < float64(KiB) {
-			return fmt.Sprintf("%.2f %s", bf, unit)
+		if math.Abs(b) < KiB {
+			return prettifyOutput(b, unit)
 		}
-		bf /= float64(KiB)
+		b /= KiB
 	}
-	return fmt.Sprintf("%.2f YiB", bf)
+	return prettifyOutput(b, "YiB")
 }
 
 func getSizeStr(size float64) string {
