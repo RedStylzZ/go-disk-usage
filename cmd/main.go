@@ -31,7 +31,7 @@ var (
 	args          Arguments
 	humanReadable = flag.Bool("h", false, "Output sizes in MiB, GiB...")
 	printTotal    = flag.Bool("t", false, "Output a total line")
-	depth         = flag.Int("d", -1, "Define till which depth the output should be printed")
+	depth         = flag.Int("l", -1, "Define till which depth the output should be printed")
 	showFiles     = flag.Bool("f", false, "Use if you want to output the files")
 	threshold     = flag.String("th", "0K", "Define a threshold for the minimum size to be printed")
 	nulEnd        = flag.Bool("0", false, "Print the results with an NUL character insted of newline")
