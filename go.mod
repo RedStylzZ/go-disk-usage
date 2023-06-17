@@ -1,3 +1,3 @@
-module disk-usage
+module go-disk-usage
 
 go 1.20
