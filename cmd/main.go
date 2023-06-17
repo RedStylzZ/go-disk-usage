@@ -23,6 +23,8 @@ type Arguments struct {
 	Level         int
 	ShowFiles     bool
 	Threshold     float64
+	Endline       string
+	PrintErrs     bool
 }
 
 var (
@@ -32,6 +34,8 @@ var (
 	level         = flag.Int("l", -1, "Define till which level the output should be printed")
 	showFiles     = flag.Bool("f", false, "Use if you want to output the files")
 	threshold     = flag.String("th", "0K", "Define a threshold for the minimum size to be printed")
+	nulEnd        = flag.Bool("0", false, "Print the results with an NUL character insted of newline")
+	printErrs     = flag.Bool("ne", false, "Use to surpress the output of errors to the cli output")
 )
 
 func prettifyOutput(size float64, suffix string) string {
@@ -71,7 +75,9 @@ func iterDirs(entries []os.DirEntry, path string, level int) float64 {
 
 		info, err := entry.Info()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			if args.PrintErrs {
+				fmt.Fprintln(os.Stderr, err)
+			}
 			continue
 		}
 
@@ -81,7 +87,9 @@ func iterDirs(entries []os.DirEntry, path string, level int) float64 {
 		if entry.IsDir() {
 			subEntries, err := os.ReadDir(path)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
+				if args.PrintErrs {
+					fmt.Fprintln(os.Stderr, err)
+				}
 				continue
 			}
 
@@ -100,7 +108,7 @@ func iterDirs(entries []os.DirEntry, path string, level int) float64 {
 
 		totalSize += size
 		if isPrintAllowed && size > args.Threshold {
-			fmt.Printf("%s\t%s\n", getSizeStr(size), path)
+			fmt.Printf("%s\t%s%s", getSizeStr(size), path, args.Endline)
 		}
 	}
 	return totalSize
@@ -114,7 +122,9 @@ func main() {
 	thSuffix := thStr[len(thStr)-1]
 	th, err := strconv.Atoi(thStr[:len(thStr)-1])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid threshold %s: %v\n", thStr, err)
+		if *printErrs {
+			fmt.Fprintf(os.Stderr, "invalid threshold %s: %v\n", thStr, err)
+		}
 		return
 	}
 
@@ -137,12 +147,20 @@ func main() {
 		return
 	}
 
+	endline := "\n"
+	if *nulEnd {
+		endline = "\x00"
+	}
+	// fmt.Printf("IS: %b: %s", endline, string(endline))
+	// fmt.Printf("%b: %s", '\x00', string('\x00'))
+	// fmt.Printf("%b: %s", '\n', string('\n'))
 	args = Arguments{
 		HumanReadable: *humanReadable,
 		Level:         *level,
 		PrintTotal:    *printTotal,
 		ShowFiles:     *showFiles,
 		Threshold:     thSize,
+		Endline:       endline,
 	}
 	path := "."
 	if len(flag.Args()) > 0 {
@@ -157,7 +175,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
-	totalSize := float64(iterDirs(dirs, path, *level+1))
+	if *level > -1 {
+		*level++
+	}
+	totalSize := float64(iterDirs(dirs, path, *level))
 
 	var total string
 	if *humanReadable {
@@ -166,9 +187,9 @@ func main() {
 		total = getAsKibibyte(float64(totalSize))
 	}
 
-	fmt.Printf("%s\t%s\n", total, path)
+	fmt.Printf("%s\t%s%s", total, path, args.Endline)
 	if *printTotal {
-		fmt.Printf("%s\tTotal\n", total)
+		fmt.Printf("%s\tTotal%s", total, args.Endline)
 	}
 
 }
