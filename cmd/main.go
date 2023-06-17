@@ -20,7 +20,7 @@ const (
 type Arguments struct {
 	HumanReadable bool
 	PrintTotal    bool
-	Level         int
+	depth         int
 	ShowFiles     bool
 	Threshold     float64
 	Endline       string
@@ -31,7 +31,7 @@ var (
 	args          Arguments
 	humanReadable = flag.Bool("h", false, "Output sizes in MiB, GiB...")
 	printTotal    = flag.Bool("t", false, "Output a total line")
-	level         = flag.Int("l", -1, "Define till which level the output should be printed")
+	depth         = flag.Int("d", -1, "Define till which depth the output should be printed")
 	showFiles     = flag.Bool("f", false, "Use if you want to output the files")
 	threshold     = flag.String("th", "0K", "Define a threshold for the minimum size to be printed")
 	nulEnd        = flag.Bool("0", false, "Print the results with an NUL character insted of newline")
@@ -64,11 +64,11 @@ func getSizeStr(size float64) string {
 	return sizeStr
 }
 
-func iterDirs(entries []os.DirEntry, path string, level int) float64 {
+func iterDirs(entries []os.DirEntry, path string, depth int) float64 {
 	var totalSize float64
 
-	if level > 0 {
-		level--
+	if depth > 0 {
+		depth--
 	}
 	for _, entry := range entries {
 		var isPrintAllowed bool
@@ -93,15 +93,15 @@ func iterDirs(entries []os.DirEntry, path string, level int) float64 {
 				continue
 			}
 
-			size += iterDirs(subEntries, path, level)
-			if level > 0 || level == -1 {
+			size += iterDirs(subEntries, path, depth)
+			if depth > 0 || depth == -1 {
 				isPrintAllowed = true
 			}
 		} else {
 			if info.Name() == "kcore" && info.Size() > 10485760 {
 				continue
 			}
-			if args.ShowFiles && (level > 0 || level == -1) {
+			if args.ShowFiles && (depth > 0 || depth == -1) {
 				isPrintAllowed = true
 			}
 		}
@@ -151,17 +151,16 @@ func main() {
 	if *nulEnd {
 		endline = "\x00"
 	}
-	// fmt.Printf("IS: %b: %s", endline, string(endline))
-	// fmt.Printf("%b: %s", '\x00', string('\x00'))
-	// fmt.Printf("%b: %s", '\n', string('\n'))
+
 	args = Arguments{
 		HumanReadable: *humanReadable,
-		Level:         *level,
+		depth:         *depth,
 		PrintTotal:    *printTotal,
 		ShowFiles:     *showFiles,
 		Threshold:     thSize,
 		Endline:       endline,
 	}
+
 	path := "."
 	if len(flag.Args()) > 0 {
 		path = flag.Arg(0)
@@ -175,10 +174,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
-	if *level > -1 {
-		*level++
+	if *depth > -1 {
+		*depth++
 	}
-	totalSize := float64(iterDirs(dirs, path, *level))
+	totalSize := float64(iterDirs(dirs, path, *depth))
 
 	var total string
 	if *humanReadable {
